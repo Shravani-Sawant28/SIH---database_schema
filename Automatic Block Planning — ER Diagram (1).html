@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Automatic Block Planning — ER Diagram</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1c2230; --muted:#5b6472;
+    --accent:#3556d6; --border:#e2e5ea; --chip:#eef1fb;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12141a; --panel:#191c24; --ink:#e7eaf1; --muted:#98a1b3;
+      --accent:#7d95ff; --border:#2b2f3a; --chip:#232838;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12141a; --panel:#191c24; --ink:#e7eaf1; --muted:#98a1b3;
+    --accent:#7d95ff; --border:#2b2f3a; --chip:#232838;
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;
+  }
+  header{
+    padding:28px 20px 16px; max-width:1100px; margin:0 auto;
+  }
+  h1{font-size:1.5rem; margin:0 0 6px;}
+  header p{color:var(--muted); margin:0; font-size:0.95rem;}
+  nav{
+    max-width:1100px; margin:0 auto 8px; padding:0 20px;
+    display:flex; flex-wrap:wrap; gap:8px;
+  }
+  nav a{
+    background:var(--chip); color:var(--accent); text-decoration:none;
+    padding:6px 12px; border-radius:20px; font-size:0.82rem; font-weight:600;
+    border:1px solid var(--border);
+  }
+  section{
+    max-width:1100px; margin:22px auto; padding:0 20px;
+  }
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:18px 18px 8px;
+  }
+  h2{font-size:1.15rem; margin:0 0 4px; display:flex; align-items:center; gap:8px;}
+  .tag{
+    font-size:0.68rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+    background:var(--chip); color:var(--accent); padding:2px 8px; border-radius:8px;
+  }
+  .desc{color:var(--muted); font-size:0.9rem; margin:4px 0 14px;}
+  .mermaid-wrap{
+    overflow-x:auto; padding-bottom:14px;
+  }
+  pre.mermaid{margin:0;}
+  footer{
+    max-width:1100px; margin:10px auto 60px; padding:0 20px; color:var(--muted); font-size:0.85rem;
+  }
+  .legend{
+    display:flex; flex-wrap:wrap; gap:14px; font-size:0.82rem; color:var(--muted); margin:8px 0 18px;
+  }
+  .legend span{display:flex; align-items:center; gap:6px;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Automatic Block Planning — Database ER Diagram</h1>
+  <p>34 tables, grouped by function so relationships stay readable. Each diagram shows primary keys (PK), foreign keys (FK), and the cardinality of every link. Jump to a section below, or scroll through all six.</p>
+</header>
+
+<nav>
+  <a href="#overview">Big picture</a>
+  <a href="#infra">Infrastructure &amp; reference</a>
+  <a href="#trains">Train operations</a>
+  <a href="#maintenance">Maintenance demand</a>
+  <a href="#blocks">Blocks / optimizer output</a>
+  <a href="#realtime">Real-time &amp; monitoring</a>
+  <a href="#ml">ML / advanced</a>
+</nav>
+
+<section id="overview">
+  <div class="card">
+    <h2>1. Big picture <span class="tag">how the domains connect</span></h2>
+    <p class="desc">The core lifecycle: a maintenance need becomes a job, a department raises a block request for it, the optimizer turns approved work into a block on a track, and that block's impact on trains is recorded. Everything else in the schema supports one of these five entities.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    ASSETS ||--o{ MAINTENANCE_JOBS : "needs work on"
+    MAINTENANCE_JOBS ||--o{ BLOCK_REQUESTS : "asks access via"
+    MAINTENANCE_JOBS }o--o{ BLOCKS : "scheduled into (block_jobs)"
+    BLOCK_REQUESTS }o--o{ BLOCKS : "fulfilled by (block_requests_fulfilled)"
+    BLOCKS }o--o{ TRAINS : "impacts (block_trains)"
+    TRACKS ||--o{ MAINTENANCE_JOBS : "work happens on"
+    TRACKS ||--o{ BLOCKS : "possession taken on"
+    TRACKS ||--o{ TRAIN_MOVEMENTS : "trains scheduled on"
+    OPTIMIZATION_RUNS ||--o{ SCHEDULE_VERSIONS : produces
+    SCHEDULE_VERSIONS ||--o{ BLOCKS : contains
+</pre>
+    </div>
+  </div>
+</section>
+
+<section id="infra">
+  <div class="card">
+    <h2>2. Infrastructure &amp; reference data <span class="tag">master data</span></h2>
+    <p class="desc">Stations and sections form the rail graph; tracks are the physical lines within a section. Assets, resources, and users all hang off a department and a location.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    DEPARTMENTS {
+        int department_id PK
+        string code
+        string name
+    }
+    STATIONS {
+        int station_id PK
+        string code
+        string name
+        string station_type
+    }
+    SECTIONS {
+        int section_id PK
+        int from_station_id FK
+        int to_station_id FK
+        string code
+    }
+    TRACKS {
+        int track_id PK
+        int section_id FK
+        string line
+        string track_type
+    }
+    USERS {
+        string user_id PK
+        string name
+        string role
+        int department_id FK
+    }
+    USER_SECTIONS {
+        string user_id FK
+        int section_id FK
+    }
+    ASSETS {
+        int asset_id PK
+        int department_id FK
+        int section_id FK
+        int track_id FK
+        int station_id FK
+    }
+    RESOURCES {
+        int resource_id PK
+        int department_id FK
+        int home_base_station_id FK
+    }
+    RESOURCE_AVAILABILITY {
+        int id PK
+        int resource_id FK
+    }
+
+    STATIONS ||--o{ SECTIONS : "from / to"
+    SECTIONS ||--o{ TRACKS : "physical lines"
+    SECTIONS ||--o{ USER_SECTIONS : "assigned"
+    USERS ||--o{ USER_SECTIONS : "assigned to"
+    DEPARTMENTS ||--o{ USERS : employs
+    DEPARTMENTS ||--o{ ASSETS : owns
+    DEPARTMENTS ||--o{ RESOURCES : owns
+    SECTIONS ||--o{ ASSETS : "located on"
+    TRACKS ||--o{ ASSETS : "located on"
+    STATIONS ||--o{ ASSETS : "point asset at"
+    STATIONS ||--o{ RESOURCES : "home base"
+    RESOURCES ||--o{ RESOURCE_AVAILABILITY : "windows"
+</pre>
+    </div>
+  </div>
+</section>
+
+<section id="trains">
+  <div class="card">
+    <h2>3. Train operations <span class="tag">timetable &amp; routing</span></h2>
+    <p class="desc"><code>train_movements</code> is the original section-by-section timetable; <code>train_routes</code> is the currently active (possibly rerouted) version, kept separate so a reroute never overwrites the baseline.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    TRAINS {
+        int train_id PK
+        string train_number
+        string train_type
+        int origin_station_id FK
+        int destination_station_id FK
+    }
+    TRAIN_MOVEMENTS {
+        int movement_id PK
+        int train_id FK
+        int section_id FK
+        int track_id FK
+        timestamptz scheduled_entry
+        timestamptz scheduled_exit
+    }
+    TRAIN_ROUTES {
+        int route_id PK
+        int train_id FK
+        int section_id FK
+        int track_id FK
+        bool is_active
+    }
+    GOODS_FORECAST {
+        int forecast_id PK
+        int section_id FK
+        int track_id FK
+        int expected_total_trains
+    }
+    STATIONS ||--o{ TRAINS : "origin / destination"
+    TRAINS ||--o{ TRAIN_MOVEMENTS : "scheduled timetable"
+    TRAINS ||--o{ TRAIN_ROUTES : "active route"
+    SECTIONS ||--o{ TRAIN_MOVEMENTS : "occupies"
+    TRACKS ||--o{ TRAIN_MOVEMENTS : "occupies"
+    SECTIONS ||--o{ TRAIN_ROUTES : "occupies"
+    TRACKS ||--o{ TRAIN_ROUTES : "occupies"
+    SECTIONS ||--o{ GOODS_FORECAST : "forecast for"
+    TRACKS ||--o{ GOODS_FORECAST : "forecast for"
+</pre>
+    </div>
+  </div>
+</section>
+
+<section id="maintenance">
+  <div class="card">
+    <h2>4. Maintenance demand <span class="tag">jobs, requests, dependencies</span></h2>
+    <p class="desc">A <code>maintenance_job</code> is the demand for work; a <code>block_request</code> is a department's BDMS-style ask for track access to do it — deliberately two different entities. <code>job_dependencies</code> and <code>compatibility_edges</code> are self-referencing links between jobs.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    MAINTENANCE_JOBS {
+        int job_id PK
+        int department_id FK
+        int asset_id FK
+        int section_id FK
+        int track_id FK
+        string status
+        numeric priority_score
+    }
+    BLOCK_REQUESTS {
+        int request_id PK
+        int job_id FK
+        int department_id FK
+        int track_id FK
+        string submitted_by FK
+        string request_status
+    }
+    JOB_RESOURCES {
+        int id PK
+        int job_id FK
+        int resource_id FK
+    }
+    JOB_DEPENDENCIES {
+        int id PK
+        int job_id FK
+        int depends_on_job FK
+    }
+    COMPATIBILITY_EDGES {
+        int id PK
+        int job_a_id FK
+        int job_b_id FK
+        bool compatible
+    }
+    MAINTENANCE_HISTORY {
+        int id PK
+        int asset_id FK
+        int job_id FK
+    }
+    TRACK_AVAILABILITY {
+        int availability_id PK
+        int track_id FK
+        string status
+    }
+
+    ASSETS ||--o{ MAINTENANCE_JOBS : "work on"
+    SECTIONS ||--o{ MAINTENANCE_JOBS : "located in"
+    TRACKS ||--o{ MAINTENANCE_JOBS : "located on"
+    DEPARTMENTS ||--o{ MAINTENANCE_JOBS : raises
+    MAINTENANCE_JOBS ||--o{ BLOCK_REQUESTS : "requests access for"
+    DEPARTMENTS ||--o{ BLOCK_REQUESTS : submits
+    TRACKS ||--o{ BLOCK_REQUESTS : "requested on"
+    USERS ||--o{ BLOCK_REQUESTS : submits
+    MAINTENANCE_JOBS ||--o{ JOB_RESOURCES : needs
+    RESOURCES ||--o{ JOB_RESOURCES : "assigned to"
+    MAINTENANCE_JOBS ||--o{ JOB_DEPENDENCIES : "job (predecessor)"
+    MAINTENANCE_JOBS ||--o{ COMPATIBILITY_EDGES : "job A / job B"
+    ASSETS ||--o{ MAINTENANCE_HISTORY : "past work"
+    MAINTENANCE_JOBS ||--o{ MAINTENANCE_HISTORY : "resulted from"
+    TRACKS ||--o{ TRACK_AVAILABILITY : "availability windows"
+</pre>
+    </div>
+  </div>
+</section>
+
+<section id="blocks">
+  <div class="card">
+    <h2>5. Blocks / optimizer output <span class="tag">the plan</span></h2>
+    <p class="desc">An <code>optimization_run</code> produces one or more <code>schedule_versions</code>; each version holds the actual <code>blocks</code> (possessions). Junction tables tie a block to the jobs it schedules, the requests it satisfies, and the trains it disrupts.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    OPTIMIZATION_RUNS {
+        int run_id PK
+        string horizon
+        string solver_status
+    }
+    SCHEDULE_VERSIONS {
+        int version_id PK
+        int run_id FK
+        int parent_version FK
+        bool is_active
+    }
+    BLOCKS {
+        int block_id PK
+        int version_id FK
+        int section_id FK
+        int track_id FK
+        string status
+        timestamptz planned_start
+        timestamptz planned_end
+    }
+    BLOCK_JOBS {
+        int id PK
+        int block_id FK
+        int job_id FK
+    }
+    BLOCK_REQUESTS_FULFILLED {
+        int block_id FK
+        int request_id FK
+    }
+    BLOCK_TRAINS {
+        int id PK
+        int block_id FK
+        int train_id FK
+        string impact_type
+    }
+
+    OPTIMIZATION_RUNS ||--o{ SCHEDULE_VERSIONS : produces
+    SCHEDULE_VERSIONS ||--o{ SCHEDULE_VERSIONS : "parent of"
+    SCHEDULE_VERSIONS ||--o{ BLOCKS : contains
+    SECTIONS ||--o{ BLOCKS : "possession in"
+    TRACKS ||--o{ BLOCKS : "possession on"
+    BLOCKS ||--o{ BLOCK_JOBS : schedules
+    MAINTENANCE_JOBS ||--o{ BLOCK_JOBS : "scheduled by"
+    BLOCKS ||--o{ BLOCK_REQUESTS_FULFILLED : satisfies
+    BLOCK_REQUESTS ||--o{ BLOCK_REQUESTS_FULFILLED : "fulfilled by"
+    BLOCKS ||--o{ BLOCK_TRAINS : impacts
+    TRAINS ||--o{ BLOCK_TRAINS : "affected by"
+</pre>
+    </div>
+  </div>
+</section>
+
+<section id="realtime">
+  <div class="card">
+    <h2>6. Real-time &amp; monitoring <span class="tag">live state + audit</span></h2>
+    <p class="desc">Append-only, timestamped tables. <code>realtime_events</code> is the incident log; the three <code>*_live_status</code> tables answer "what is the state right now" for trains, tracks, and assets. Reroutes and audit actions reference this layer.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    REALTIME_EVENTS {
+        int event_id PK
+        int section_id FK
+        int track_id FK
+        int asset_id FK
+        int train_id FK
+        int job_id FK
+        int location_station_id FK
+    }
+    TRAIN_LIVE_STATUS {
+        int id PK
+        int train_id FK
+        int current_station_id FK
+        int current_section_id FK
+        int current_track_id FK
+    }
+    TRACK_LIVE_STATUS {
+        int id PK
+        int track_id FK
+        int failure_event_id FK
+    }
+    ASSET_LIVE_STATUS {
+        int id PK
+        int asset_id FK
+    }
+    EXECUTION_RECORDS {
+        int id PK
+        int block_id FK
+        string recorded_by FK
+    }
+    REROUTING_DECISIONS {
+        int decision_id PK
+        int train_id FK
+        int event_id FK
+        int blocked_track_id FK
+        int original_route_id FK
+        int alternate_route_id FK
+    }
+    AUDIT_LOGS {
+        int id PK
+        string actor_id FK
+        string entity_type
+    }
+
+    SECTIONS ||--o{ REALTIME_EVENTS : "occurs in"
+    TRACKS ||--o{ REALTIME_EVENTS : "occurs on"
+    ASSETS ||--o{ REALTIME_EVENTS : "raised by"
+    TRAINS ||--o{ REALTIME_EVENTS : "involves"
+    MAINTENANCE_JOBS ||--o{ REALTIME_EVENTS : "related to"
+    STATIONS ||--o{ REALTIME_EVENTS : "located at"
+    TRAINS ||--o{ TRAIN_LIVE_STATUS : "current state"
+    TRACKS ||--o{ TRACK_LIVE_STATUS : "current state"
+    REALTIME_EVENTS ||--o{ TRACK_LIVE_STATUS : "caused by"
+    ASSETS ||--o{ ASSET_LIVE_STATUS : "current state"
+    BLOCKS ||--o{ EXECUTION_RECORDS : "actual execution"
+    USERS ||--o{ EXECUTION_RECORDS : recorded
+    TRAINS ||--o{ REROUTING_DECISIONS : rerouted
+    REALTIME_EVENTS ||--o{ REROUTING_DECISIONS : "triggered by"
+    TRACKS ||--o{ REROUTING_DECISIONS : "blocked track"
+    TRAIN_ROUTES ||--o{ REROUTING_DECISIONS : "original route"
+    TRAIN_ROUTES ||--o{ REROUTING_DECISIONS : "alternate route"
+    USERS ||--o{ AUDIT_LOGS : "acted as"
+</pre>
+    </div>
+  </div>
+</section>
+
+<section id="ml">
+  <div class="card">
+    <h2>7. ML / advanced <span class="tag">optional — Phase 8-10</span></h2>
+    <p class="desc">Only populated once the GNN-guided ALNS training pipeline is built. Not required for priority scoring, CP-SAT, A*, or standard ALNS.</p>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+erDiagram
+    OPTIMIZATION_RUNS {
+        int run_id PK
+    }
+    GNN_TRAINING_SAMPLES {
+        bigint sample_id PK
+        int run_id FK
+        jsonb state_snapshot
+        string chosen_operator
+        numeric reward
+    }
+    OPTIMIZATION_RUNS ||--o{ GNN_TRAINING_SAMPLES : "generated during"
+</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--accent)"></span> PK = primary key, FK = foreign key</span>
+    <span>||–o{ = one-to-many</span>
+    <span>}o–o{ = many-to-many (via a junction table)</span>
+  </div>
+  Attribute lists are trimmed to PK/FK and a few defining columns for readability.
+</footer>
+
+<script>
+  function initMermaid(){
+    var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: isDark ? 'dark' : 'default',
+      er: { useMaxWidth: false, entityPadding: 12, fontSize: 13 },
+      securityLevel: 'loose'
+    });
+  }
+  initMermaid();
+</script>
+
+<!--claude-mermaid-runtime-begin:3477-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:pre.textContent||''};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+</body>
+</html>
